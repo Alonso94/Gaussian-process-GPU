@@ -9,7 +9,7 @@
 
 using namespace std;
 
-#define BLOCK_SIZE 16
+#define BLOCK_SIZE 64
 
 double rnd(double fmin=0,double fmax=10){
     double f = (double)rand() / RAND_MAX;
@@ -40,7 +40,7 @@ __global__ void gpu_matmul(double *a,double *b,double *c,int m,int n,int k){
     }
 }
 
-int cudaMain() {
+int cudaMain(int argc, char **argv) {
     int m=1024,n=1024,k=1020;
     dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
     dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
