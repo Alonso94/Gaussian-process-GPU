@@ -9,91 +9,122 @@
 
 using namespace std;
 
-__global__ void vecAdd(float *a, float *b, float *c, int size) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
+#define BLOCK_SIZE 16
 
-    printf("Hello from block %d, thread %d\n", blockIdx.x, threadIdx.x);
-
-    if (i < size)
-        *(c + i) = *(a + i) + *(b + i);
+double rnd(double fmin=0,double fmax=10){
+    double f = (double)rand() / RAND_MAX;
+    return fmin + f * (fmax - fmin);
 }
 
+void cpu_matmul(double *a,double *b,double *c,int m,int n,int k){
+    //size a : m*k
+    //size b : k*n
+    //size c : m*n
+    for(int i=0;i<m;i++)
+        for(int j=0;j<n;j++){
+            double tmp=0.0;
+            for(int w=0;w<k;w++)
+                tmp+=a[i*k+w]*b[w*n+j];
+            c[i*n+j]=tmp;
+        }
+}
 
-int doVecAdd() {
-    cudaEvent_t begin, begin_kernel, stop_kernel, stop;
-    cudaEventCreate(&begin);
-    cudaEventCreate(&begin_kernel);
-    cudaEventCreate(&stop_kernel);
+__global__ void gpu_matmul(double *a,double *b,double *c,int m,int n,int k){
+    int row=blockIdx.y * blockDim.y + threadIdx.y;
+    int col=blockIdx.x * blockDim.x + threadIdx.x;
+    double sum=0;
+    if (col<n && row <m){
+        for (int i=0;i<k;i++)
+            sum+=a[row*k+i]*b[i*n+col];
+        c[row*n+col]=sum;
+    }
+}
+
+int cudaMain() {
+    int m=1024,n=1024,k=1020;
+    dim3 dimGrid((n + BLOCK_SIZE - 1) / BLOCK_SIZE, (m + BLOCK_SIZE - 1) / BLOCK_SIZE);
+    dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+    cout<<"begin"<<endl;
+    srand(1024);
+    double *a,*b,*c,*cc;
+    //memory allocation in the host (CPU)
+    cudaMallocHost((void**)&a,sizeof(double)*m*k);
+    cudaMallocHost((void**)&b,sizeof(double)*k*n);
+    cudaMallocHost((void**)&c,sizeof(double)*m*n);
+    cudaMallocHost((void**)&cc,sizeof(double)*m*n);
+    //generate random arrays
+    for(int i=0;i<m;i++)
+        for(int j=0;j<k;++j)
+            a[i * k + j] = rnd();
+    for(int i=0;i<k;i++)
+        for(int j=0;j<n;++j)
+            a[i*n+j]=rnd();
+
+    cout<<"memory allocation done"<<endl;
+
+    //to record the execution time
+    float t_gpu,t_cpu;
+    cudaEvent_t start,stop;
+    cudaEventCreate(&start);
     cudaEventCreate(&stop);
 
-    float *a, *b, *c;
-    int size = 10;
 
-
-    a = (float *)malloc(sizeof(float) * size);
-    b = (float *)malloc(sizeof(float) * size);
-    c = (float *)malloc(sizeof(float) * size);
-
-    int j = 0;
-    for (int i = 0; i<size; i++) {
-        *(a + i) = j++;
-        *(b + i) = j++;
-    }
-
-    float *d_a, *d_b, *d_c;
-
-    cudaMalloc(&d_a, size*sizeof(float));
-    cudaMalloc(&d_b, size*sizeof(float));
-    cudaMalloc(&d_c, size*sizeof(float));
-
-    cudaEventRecord(begin);
-
-    cudaMemcpy(d_a, a, size*sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_b, b, size*sizeof(float), cudaMemcpyHostToDevice);
-
-    cudaEventRecord(begin_kernel);
-
-    vecAdd <<<1, 1024 >>>(d_a, d_b, d_c, size);
-
-    cudaEventRecord(stop_kernel);
-    gpuErrchk(cudaPeekAtLastError());
-
-    cudaMemcpy(c, d_c, size*sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop_kernel);
+    ////////////////////////////////////
+    // GPU test
+    ////////////////////////////////////
+    // start recording the time
+    cudaEventRecord(start,0);
+    //memory allocation on device (GPU)
+    double *cu_a,*cu_b,*cu_c;
+    cudaMalloc((void**)&cu_a, sizeof(double)*m*k);
+    cudaMalloc((void**)&cu_b, sizeof(double)*k*n);
+    cudaMalloc((void**)&cu_c, sizeof(double)*m*n);
+    //copy matrix from host (CPU) to device (GPU)
+    cudaMemcpy(cu_a,a, sizeof(double)*m*k, cudaMemcpyHostToDevice);
+    cudaMemcpy(cu_b,b,sizeof(double)*k*n, cudaMemcpyHostToDevice);
+    // call the gpu function
+    gpu_matmul<<<dimGrid,dimBlock>>>(cu_a,cu_b,cu_c,m,n,k);
+    //copy the result
+    cudaMemcpy(c,cu_a, sizeof(double)*m*n,cudaMemcpyDeviceToHost);
+    cudaThreadSynchronize();
+    //stop the timer
+    cudaEventRecord(stop,0);
     cudaEventSynchronize(stop);
-    float kernelTime, totalTime; // Initialize elapsedTime;
-    cudaEventElapsedTime(&kernelTime, begin_kernel, stop_kernel);
-    cudaEventElapsedTime(&totalTime, begin, stop);
-    printf("Time for KERNEL execution is: %fms\n", kernelTime);
-    printf("Total time is: %fms\n", totalTime);
+    //calculate the time
+    cudaEventElapsedTime(&t_gpu, start, stop);
+    printf("t_gpu = %5f ms\n",t_gpu);
 
-    printf("A vector:\n");
-    for(int i=0; i<size; i++)
-        printf("%.3f ", *(a+i));
-    printf("\n");
+    ////////////////////////////////////
+    // CPU test
+    ////////////////////////////////////
+    // start recording the time
+    cudaEventRecord(start,0);
+    //call the dpu function
+    cpu_matmul(a,b,cc,m,n,k);
+    //stop the timer
+    cudaEventRecord(stop,0);
+    cudaEventSynchronize(stop);
+    //calculate the time
+    cudaEventElapsedTime(&t_cpu, start, stop);
+    printf("t_cpu = %5f ms \n",t_cpu);
 
-    printf("B vector:\n");
-    for(int i=0; i<size; i++)
-        printf("%.3f ",*(b+i));
-    printf("\n");
+    //////////////////////////////////////
+    // compare the results
+    /////////////////////////////////////
+    double diff=0.0;
+    for(int i=0;i<m;++i)
+        for (int j=0;j<n;++j){
+                diff+=c[i*n+j]!=cc[i*n+j];
+        }
+    printf("Sum of differences between elements of result matrix = %f",diff);
 
-    printf("C vector:\n");
-    for(int i=0; i<size; i++)
-        printf("%.3f ", *(c+i));
-    printf("\n");
+    cudaFree(a);
+    cudaFree(b);
+    cudaFree(c);
+    cudaFree(cc);
+    cudaFree(cu_a);
+    cudaFree(cu_b);
+    cudaFree(cu_c);
 
-    cudaFree(d_a);
-    cudaFree(d_b);
-    cudaFree(d_c);
-
-    return 0;
-}
-
-
-int cudaMain(int argc, char **argv) {
-    cout<<"Hello"<<endl;
-    doVecAdd();
     return 0;
 }

@@ -26,3 +26,5 @@ set_target_properties(
     )
 
 target_link_libraries(GP_GPU GPU)
+
+set(CMAKE_CXX_FLAGS "-std=c++14")
