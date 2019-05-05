@@ -9,6 +9,7 @@
 
 using namespace std;
 
+//define thread to block number
 #define BLOCK_SIZE 64
 
 double rnd(double fmin=0,double fmax=10){
@@ -30,13 +31,24 @@ void cpu_matmul(double *a,double *b,double *c,int m,int n,int k){
 }
 
 __global__ void gpu_matmul(double *a,double *b,double *c,int m,int n,int k){
-    int row=blockIdx.y * blockDim.y + threadIdx.y;
-    int col=blockIdx.x * blockDim.x + threadIdx.x;
+    int i=blockIdx.y * blockDim.y + threadIdx.y;
+    int j=blockIdx.x * blockDim.x + threadIdx.x;
     double sum=0;
-    if (col<n && row <m){
-        for (int i=0;i<k;i++)
-            sum+=a[row*k+i]*b[i*n+col];
-        c[row*n+col]=sum;
+    if (i<m && j<n){
+        for (int w=0;w<k;w++)
+            sum+=a[i*k+w]*b[w*n+j];
+        c[i*n+j]=sum;
+    }
+}
+
+__global__ void transpose(double *in,double *out,int m, int n){
+    int i=blockIdx.y * blockDim.y + threadIdx.y;
+    int j=blockIdx.x * blockDim.x + threadIdx.x;
+    int ind,new_ind;
+    if(j <n && i <m){
+        ind= j*n+i;
+        new_ind= i*m + j;
+        out[new_ind]=in[ind];
     }
 }
 
