@@ -28,3 +28,9 @@ set_target_properties(
 target_link_libraries(GP_GPU GPU)
 
 set(CMAKE_CXX_FLAGS "-std=c++14")
+
+find_package(PythonLibs 3.5)
+target_include_directories(GP_GPU PRIVATE ${PYTHON_INCLUDE_DIRS})
+target_link_libraries(GP_GPU ${PYTHON_LIBRARIES})
+set(CMAKE_CXX_FLAGS "-I /usr/local/lib/python3.5/dist-packages/numpy/core/include")
+#set(CMAKE_CXX_FLAGS "-DWITHOUT_NUMPY")
