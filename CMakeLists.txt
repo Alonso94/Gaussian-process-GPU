@@ -14,6 +14,7 @@ add_library(GPU
         cudaHeaders.h
         gp/utils_cuda.h
         gp/linalg.cu gp/linalog.h
+        gp/kernels.cu gp/kernels.h
         )
 
 add_executable(GP_GPU
