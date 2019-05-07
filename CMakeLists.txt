@@ -10,9 +10,10 @@ set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -gencode arch=compute_61,code=sm_61")
 
 add_library(GPU
-        cudaMain.cu
-        cudaMain.h
+        cudaMain.cu cudaMain.h
         cudaHeaders.h
+        gp/utils_cuda.h
+        gp/linalg.cu gp/linalog.h
         )
 
 add_executable(GP_GPU
