@@ -16,6 +16,7 @@ add_library(GPU
         gp/linalg.cu gp/linalog.h
         gp/kernels.cu gp/kernels.h
         gp/conv.cu gp/conv.h
+        gp/cudagp.cu gp/cudagp.h
         )
 
 add_executable(GP_GPU
