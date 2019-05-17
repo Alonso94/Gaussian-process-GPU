@@ -23,7 +23,7 @@ typedef enum {
 
 struct parameters{
     kernelstring_enum kernel;
-    float **values;
+    float *values;
     int numparam;
 };
 
